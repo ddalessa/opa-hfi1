@@ -471,15 +471,15 @@ static ssize_t diagpkt_send(struct diag_pkt *dp)
 	 * should catch most.
 	 */
 	if (dp->flags & F_DIAGPKT_WAIT) {
-		/* always force a credit return */
-		dp->pbc |= PBC_CREDIT_RETURN;
-		/* turn on credit return interrupts */
-		sc_add_credit_return_intr(sc);
 		wait = kmalloc(sizeof(*wait), GFP_KERNEL);
 		if (!wait) {
 			ret = -ENOMEM;
 			goto bail;
 		}
+		/* always force a credit return */
+		dp->pbc |= PBC_CREDIT_RETURN;
+		/* turn on credit return interrupts */
+		sc_add_credit_return_intr(sc);
 		init_completion(&wait->credits_returned);
 		atomic_set(&wait->count, 2);
 		wait->code = PRC_OK;
@@ -490,8 +490,8 @@ static ssize_t diagpkt_send(struct diag_pkt *dp)
 
 retry:
 	pbuf = sc_buffer_alloc(sc, total_len, credit_cb, credit_arg);
-	if (!pbuf) {
-		if (trycount == 0) {
+	if (IS_ERR_OR_NULL(pbuf)) {
+		if (!pbuf && trycount == 0) {
 			/* force a credit return and try again */
 			sc_return_credits(sc);
 			trycount = 1;
@@ -507,7 +507,10 @@ retry:
 			kfree(wait);
 			wait = NULL;
 		}
-		ret = -ENOSPC;
+		if (IS_ERR(pbuf))
+			ret = PTR_ERR(pbuf);
+		else
+			ret = -ENOSPC;
 		goto bail;
 	}
 
