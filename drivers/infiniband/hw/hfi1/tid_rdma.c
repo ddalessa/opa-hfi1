@@ -190,12 +190,7 @@ __find_flow_ranged(struct tid_rdma_request *req, u16 head, u16 tail,
 	return NULL;
 }
 
-static struct tid_rdma_flow *find_flow(struct tid_rdma_request *req,
-				       u32 psn, u16 *fidx)
-{
-	return __find_flow_ranged(req, req->setup_head, req->clear_tail, psn,
-				  fidx);
-}
+
 
 static int hfi1_send_tid_ok(struct rvt_qp *qp)
 {
@@ -3707,19 +3702,8 @@ static bool handle_read_kdeth_eflags(struct hfi1_ctxtdata *rcd,
 			 * to prevent continuous Flow Sequence errors for any
 			 * packets that could be still in the fabric.
 			 */
-			flow = find_flow(req, psn, NULL);
-			if (!flow) {
-				/*
-				 * We can't find the IB PSN matching the
-				 * received KDETH PSN. The only thing we can
-				 * do at this point is report the error to
-				 * the QP.
-				 */
-				hfi1_kern_read_tid_flow_free(qp);
-				spin_unlock(&qp->s_lock);
-				rvt_rc_error(qp, IB_WC_LOC_QP_OP_ERR);
-				return ret;
-			}
+			flow = &req->flows[req->clear_tail];
+
 			if (priv->s_flags & HFI1_R_TID_SW_PSN) {
 				diff = cmp_psn(psn,
 					       flow->flow_state.r_next_psn);
