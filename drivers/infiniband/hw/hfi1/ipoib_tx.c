@@ -645,12 +645,11 @@ static int hfi1_ipoib_sdma_sleep(struct sdma_engine *sde,
 {
 	struct hfi1_ipoib_txq *txq =
 		container_of(wait->iow, struct hfi1_ipoib_txq, wait);
-	struct hfi1_ibdev *dev = &txq->priv->dd->verbs_dev;
 
-	write_seqlock(&dev->iowait_lock);
+	write_seqlock(&sde->waitlock);
 	if (likely(txq->priv->netdev->reg_state == NETREG_REGISTERED)) {
 		if (sdma_progress(sde, seq, txreq)) {
-			write_sequnlock(&dev->iowait_lock);
+			write_sequnlock(&sde->waitlock);
 			return -EAGAIN;
 		}
 
@@ -659,11 +658,11 @@ static int hfi1_ipoib_sdma_sleep(struct sdma_engine *sde,
 		if (list_empty(&txq->wait.list))
 			iowait_queue(pkts_sent, wait->iow, &sde->dmawait);
 
-		write_sequnlock(&dev->iowait_lock);
+		write_sequnlock(&sde->waitlock);
 		return -EBUSY;
 	}
 
-	write_sequnlock(&dev->iowait_lock);
+	write_sequnlock(&sde->waitlock);
 	return -EINVAL;
 }
 
