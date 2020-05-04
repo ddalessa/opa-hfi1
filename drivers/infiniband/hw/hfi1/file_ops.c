@@ -96,13 +96,21 @@ MODULE_PARM_DESC(ifs_sel_mode, "Use SELinux for PSM");
  */
 static int hfi1_file_open(struct inode *inode, struct file *fp);
 static int hfi1_file_close(struct inode *inode, struct file *fp);
-#if !defined(IFS_RH73) && !defined(IFS_RH74) && !defined(IFS_RH75) && !defined(IFS_RH76) && !defined(IFS_RH77)
 static ssize_t hfi1_write_iter(struct kiocb *kiocb, struct iov_iter *from);
-#else
-static ssize_t hfi1_aio_write(struct kiocb *kiocb, const struct iovec *iovec,
-			      unsigned long dim, loff_t offset);
-#endif
+#ifdef HAVE_AIO_WRITE
+#define iter_is_iovec(from) true
 
+static ssize_t hfi1_aio_write(struct kiocb *kiocb, const struct iovec *iovec,
+			      unsigned long dim, loff_t offset)
+{
+	struct iov_iter from = {
+		.nr_segs = dim,
+		.iov = iovec
+	};
+
+	return hfi1_write_iter(kiocb, &from);
+}
+#endif
 static unsigned int hfi1_poll(struct file *fp, struct poll_table_struct *pt);
 static int hfi1_file_mmap(struct file *fp, struct vm_area_struct *vma);
 
@@ -152,7 +160,7 @@ static long hfi1_file_ioctl(struct file *fp, unsigned int cmd,
 
 static const struct file_operations hfi1_file_ops = {
 	.owner = THIS_MODULE,
-#if !defined(IFS_RH73) && !defined(IFS_RH74) && !defined(IFS_RH75) && !defined(IFS_RH76) && !defined(IFS_RH77)
+#ifndef HAVE_AIO_WRITE
 	.write_iter = hfi1_write_iter,
 #else
 	.aio_write = hfi1_aio_write,
@@ -348,7 +356,6 @@ static long hfi1_file_ioctl(struct file *fp, unsigned int cmd,
 	return ret;
 }
 
-#if !defined(IFS_RH73) && !defined(IFS_RH74) && !defined(IFS_RH75) && !defined(IFS_RH76) && !defined(IFS_RH77)
 static ssize_t hfi1_write_iter(struct kiocb *kiocb, struct iov_iter *from)
 {
 	struct hfi1_filedata *fd = kiocb->ki_filp->private_data;
@@ -396,47 +403,6 @@ static ssize_t hfi1_write_iter(struct kiocb *kiocb, struct iov_iter *from)
 	srcu_read_unlock(&fd->pq_srcu, idx);
 	return reqs;
 }
-#else
-static ssize_t hfi1_aio_write(struct kiocb *kiocb, const struct iovec *iovec,
-			      unsigned long dim, loff_t offset)
-{
-	struct hfi1_filedata *fd = kiocb->ki_filp->private_data;
-	struct hfi1_user_sdma_pkt_q *pq = fd->pq;
-	struct hfi1_user_sdma_comp_q *cq = fd->cq;
-	int done = 0, reqs = 0;
-
-	if (!cq || !pq)
-		return -EIO;
-
-	if (!dim)
-		return -EINVAL;
-
-	hfi1_cdbg(SDMA, "SDMA request from %u:%u (%lu)",
-		fd->uctxt->ctxt, fd->subctxt, dim);
-
-	if (atomic_read(&pq->n_reqs) == pq->n_max_reqs)
-	return -ENOSPC;
-
-	while (dim) {
-		int ret;
-		unsigned long count = 0;
-
-		ret = hfi1_user_sdma_process_request(
-			fd, (struct iovec *)(iovec + done),
-			dim, &count);
-		if (ret) {
-			reqs = ret;
-			break;
-		}
-		dim -= count;
-		done += count;
-		reqs++;
-	}
-
-	return reqs;
-}
-#endif
-
 
 static int hfi1_file_mmap(struct file *fp, struct vm_area_struct *vma)
 {

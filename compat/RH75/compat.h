@@ -50,6 +50,7 @@
 #define CREATE_AH_HAS_UDATA
 #define HAVE_ALLOC_RDMA_NETDEV
 #define NEED_MM_HELPER_FUNCTIONS
+#define HAVE_AIO_WRITE
 
 #include "compat_common.h"
 

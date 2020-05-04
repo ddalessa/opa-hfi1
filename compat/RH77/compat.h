@@ -56,6 +56,7 @@
 #define HAVE_NET_DEVICE_EXTENDED
 #define HAVE_ARRAY_SIZE
 #define HAVE_NOSPEC_H
+#define HAVE_AIO_WRITE
 
 #include "compat_common.h"
 
